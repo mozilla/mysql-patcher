@@ -1,0 +1,28 @@
+{
+  "name": "mysql-patcher",
+  "version": "0.1.0",
+  "description": "A package/program to help patch MySql databases",
+  "main": "index.js",
+  "bin": {
+    "mysql-patcher": "./bin/mysql-patcher"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/chilts/mysql-patcher.git"
+  },
+  "keywords": [
+    "mysql"
+  ],
+  "author": "Andrew Chilton",
+  "license": "MPL2",
+  "bugs": {
+    "url": "https://github.com/chilts/mysql-patcher/issues"
+  },
+  "homepage": "https://github.com/chilts/mysql-patcher",
+  "dependencies": {
+    "tape": "^2.14.0"
+  }
+}

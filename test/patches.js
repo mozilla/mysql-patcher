@@ -7,9 +7,14 @@ var test = require('tape')
 var patcher = require('../')
 
 test('read patch set (ok)', function (t) {
-  var dir = path.join(__dirname, 'patches')
+  var ctx = {
+    dir : path.join(__dirname, 'patches')
+  }
 
-  patcher.readPatchFiles(dir, function(err, patches) {
+  // call readPatchFiles() with the above context
+  patcher.readPatchFiles.call(ctx, function(err) {
+    var patches = ctx.patches
+
     // check there are 3 patch levels
     var levels = Object.keys(patches).length
     t.equal(levels, 3, 'There are three patch levels (0, 1, 2)')

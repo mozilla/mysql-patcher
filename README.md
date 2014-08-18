@@ -10,7 +10,7 @@ A package/program to help patch MySql databases.
 Options:
 
 * createDatabase :
-
+* reversePatchAllowed : true/false - allow reverse patching to take place (default: false)
 
 * upgrade : true/false - Useful to set to false if no patch (default: true)
 

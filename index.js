@@ -8,11 +8,127 @@ var path = require('path')
 
 // npm
 var async = require('async')
+var clone = require('clone')
 
-function noop() { }
+// globals for this package
+var noop = Function.prototype // a No Op function
 
-function readPatchFiles(dir, callback) {
-  var patches = {}
+// the main export from this package
+function patch(options, callback) {
+  // callback is required
+  if ( typeof callback !== 'function' ) {
+    return callback(new Error('A callback must be provided'))
+  }
+
+  // check the required options
+  if ( !options.dir ) {
+    return callback(new Error("Option 'dir' must be provided"))
+  }
+
+  // set some defaults
+  options.metaTablename = options.metaTablename || 'dbMetadata'
+  options.reversePatchAllowed = options.reversePatchAllowed || false
+  options.patchKey = options.patchKey || 'patch'
+
+  // ToDo: fill in once other supporting functions are complete
+
+  var context = {
+    options : options,
+  }
+  async.series(
+    [
+      createDatabase.bind(context),
+      changeUser.bind(context),
+      checkDbMetadataExists.bind(context),
+      readDbPatchLevel.bind(context),
+      readPatchFiles.bind(context),
+      checkAllPatchesAvailable.bind(context),
+      applyPatches.bind(context),
+    ], callback
+  )
+}
+
+function createConnection(callback) {
+  // when creating the database, we need to connect without a database name
+  var opts = clone(this.options)
+  delete opts.database
+
+  this.connection = mysql.createConnection(opts)
+  this.connection.connect(function(err) {
+    if (err) { return callback(err) }
+    callback()
+  })
+}
+
+function createDatabase(callback) {
+  if ( this.options.createDatabase ) {
+    connection.query(
+      'CREATE DATABASE IF NOT EXISTS ' + database + ' CHARACTER SET utf8 COLLATE utf8_unicode_ci',
+      callback
+    )    
+  }
+  else {
+    process.nextTick(callback)
+  }
+}
+
+function changeUser(callback) {
+  this.connection.changeUser(
+    {
+      user     : this.options.user,
+      password : this.options.password,
+      database : this.options.database
+    },
+    callback
+  )
+}
+
+function checkDbMetadataExists(callback) {
+  var context = this
+  var query = "SELECT COUNT(*) AS count FROM information_schema.TABLES WHERE table_schema = ? AND table_name = ?"
+  this.connection.query(
+    query,
+    [ this.options.database, this.options.metaTablename ],
+    function (err, result) {
+      if (err) { return callback(err) }
+      context.metaTableExists = result[0].count === 0 ? false : true
+      callback()
+    }
+  )
+}
+
+function readDbPatchLevel(callback) {
+  var context = this
+
+  if ( this.metaTableExists === false ) {
+    // the table doesn't exist, so start at patch level 0
+    context.currentPatchLevel = 0
+    process.nextTick(callback)
+    return
+  }
+
+  // find out what patch level the database is currently at
+  var d = P.defer()
+  var query = "SELECT value FROM dbMetadata WHERE name = ?"
+  client.query(
+    query,
+    [ options.patchKey ],
+    function(err, result) {
+      if (err) { return callback(err) }
+
+      // convert the patch level from a string to a number
+      ctx.currentPatchLevel = +result[0].value
+      callback()
+    }
+  )
+}
+
+
+function readPatchFiles(callback) {
+  var ctx = this
+
+  var dir = ctx.dir
+  ctx.patches = {}
 
   fs.readdir(dir, function(err, files) {
     if (err) return callback(err)
@@ -32,39 +148,77 @@ function readPatchFiles(dir, callback) {
 
         var from = parseInt(m[1], 10)
         var to = parseInt(m[2], 10)
-        patches[from] = patches[from] || {}
+        ctx.patches[from] = ctx.patches[from] || {}
 
         fs.readFile(filename, { encoding : 'utf8' }, function(err, data) {
           if (err) return done(err)
-          patches[from][to] = data
+          ctx.patches[from][to] = data
           done()
         })
       },
       function(err) {
         if (err) return callback(err)
-        callback(null, patches)
+        callback()
       }
     )
   })
 }
 
-// Options:
-//
+function checkAllPatchesAvailable(callback) {
+  var ctx = this
 
-function patch(options, callback) {
-  // callback is required
-  if ( typeof callback !== 'function' ) {
-    return callback(new Error('A callback must be provided'))
+  ctx.patchesToApply = []
+
+  // if we don't need any patches
+  if ( ctx.options.patchLevel === ctx.currentPatchLevel ) {
+    process.nextTick(callback)
+    return
   }
 
-  // check the required options
-  if ( !options.dir ) {
-    return callback(new Error("Option 'dir' must be provided"))
+  // First, loop through all the patches we need to apply to make sure they exist.
+  var direction = ctx.currentPatchLevel < ctx.options.patchLevel ? 1 : -1
+  var currentPatchLevel = ctx.currentPatchLevel
+  var nextPatchLevel
+  while ( currentPatchLevel !== ctx.options.patchLevel ) {
+    nextPatchLevel = currentPatchLevel + direction
+
+    // check that this patch exists
+    if ( !patches[currentPatchLevel][nextPatchLevel] ) {
+      process.nextTick(function() {
+        callback(new Error('Patch from level ' + currentPatchLevel + ' to ' + (currentPatchLevel+1) + ' does not exist'))
+      })
+      return
+    }
+
+    // add this patch onto the patchesToApply
+    ctx.patchesToApply.push({
+      sql  : patches[currentPatchLevel][nextPatchLevel],
+      from : currentPatchLevel,
+      to   : nextPatchLevel,
+    })
+    currentPatchLevel += direction
   }
 
-  // ToDo: fill in once other supporting functions are complete
-
+  callback()
 }
 
+function applyPatches(callback) {
+  var ctx = this
+
+  async.each(
+    ctx.patchesToApply,
+    function(patch, donePatch) {
+      // emit : 'Updating DB for patch ' + patch.from + ' to ' + patch.to
+      ctx.connection.query(patch.sql, donePatch)
+    },
+    callback
+  )
+}
+
+function closeConnection(callback) {
+  this.connection.end(callback)
+}
+
+// exports
 module.exports.readPatchFiles = readPatchFiles
 module.exports.patch          = patch

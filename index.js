@@ -204,7 +204,7 @@ function checkAllPatchesAvailable(callback) {
 function applyPatches(callback) {
   var ctx = this
 
-  async.each(
+  async.eachSeries(
     ctx.patchesToApply,
     function(patch, donePatch) {
       // emit : 'Updating DB for patch ' + patch.from + ' to ' + patch.to

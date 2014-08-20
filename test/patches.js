@@ -8,7 +8,9 @@ var patcher = require('../')
 
 test('read patch set (ok)', function (t) {
   var ctx = {
-    dir : path.join(__dirname, 'patches'),
+    options : {
+      dir : path.join(__dirname, 'patches'),
+    },
   }
 
   // call readPatchFiles() with the above context

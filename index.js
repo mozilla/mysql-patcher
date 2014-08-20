@@ -123,7 +123,6 @@ function readDbPatchLevel(callback) {
   )
 }
 
-
 function readPatchFiles(callback) {
   var ctx = this
 
@@ -183,7 +182,7 @@ function checkAllPatchesAvailable(callback) {
     nextPatchLevel = currentPatchLevel + direction
 
     // check that this patch exists
-    if ( !patches[currentPatchLevel][nextPatchLevel] ) {
+    if ( !ctx.patches[currentPatchLevel] || !ctx.patches[currentPatchLevel][nextPatchLevel] ) {
       process.nextTick(function() {
         callback(new Error('Patch from level ' + currentPatchLevel + ' to ' + (currentPatchLevel+1) + ' does not exist'))
       })
@@ -192,7 +191,7 @@ function checkAllPatchesAvailable(callback) {
 
     // add this patch onto the patchesToApply
     ctx.patchesToApply.push({
-      sql  : patches[currentPatchLevel][nextPatchLevel],
+      sql  : ctx.patches[currentPatchLevel][nextPatchLevel],
       from : currentPatchLevel,
       to   : nextPatchLevel,
     })
@@ -219,6 +218,13 @@ function closeConnection(callback) {
   this.connection.end(callback)
 }
 
-// exports
+// main export
+module.exports.patch = patch
+// and these for testing purposes
+module.exports.createDatabase = createDatabase
+module.exports.changeUser = changeUser
+module.exports.checkDbMetadataExists = checkDbMetadataExists
+module.exports.readDbPatchLevel = readDbPatchLevel
 module.exports.readPatchFiles = readPatchFiles
-module.exports.patch          = patch
+module.exports.checkAllPatchesAvailable = checkAllPatchesAvailable
+module.exports.applyPatches = applyPatches

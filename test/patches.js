@@ -8,11 +8,13 @@ var patcher = require('../')
 
 test('read patch set (ok)', function (t) {
   var ctx = {
-    dir : path.join(__dirname, 'patches')
+    dir : path.join(__dirname, 'patches'),
   }
 
   // call readPatchFiles() with the above context
   patcher.readPatchFiles.call(ctx, function(err) {
+    t.ok(!err, 'No error occurred')
+
     var patches = ctx.patches
 
     // check there are 3 patch levels
@@ -32,4 +34,110 @@ test('read patch set (ok)', function (t) {
 
     t.end()
   })
+})
+
+test('check all patches are available (forwards)', function(t) {
+  var ctx = {
+    options : {
+      patchLevel : 2,
+    },
+    currentPatchLevel : 0,
+    patches : {
+      '0' : {
+        '1' : '-- 0->1\n',
+      },
+      '1' : {
+        '2' : '-- 1->2\n',
+      },
+    },
+  }
+
+  patcher.checkAllPatchesAvailable.call(ctx, function(err) {
+    t.ok(!err, 'No error occurred')
+
+    var patches = [
+      { sql : '-- 0->1\n', from : 0, to : 1, },
+      { sql : '-- 1->2\n', from : 1, to : 2, },
+    ]
+    t.deepEqual(ctx.patchesToApply, patches, 'The patches to be applied')
+
+    t.end()
+  })
+
+})
+
+test('check all patches are available (backwards)', function(t) {
+  var ctx = {
+    options : {
+      patchLevel : 0,
+    },
+    currentPatchLevel : 2,
+    patches : {
+      '2' : {
+        '1' : '-- 2->1\n',
+      },
+      '1' : {
+        '0' : '-- 1->0\n',
+      },
+    },
+  }
+
+  patcher.checkAllPatchesAvailable.call(ctx, function(err) {
+    t.ok(!err, 'No error occurred')
+
+    var patches = [
+      { sql : '-- 2->1\n', from : 2, to : 1, },
+      { sql : '-- 1->0\n', from : 1, to : 0, },
+    ]
+    t.deepEqual(ctx.patchesToApply, patches, 'The patches to be applied')
+
+    t.end()
+  })
+
+})
+
+test('check all patches are available (fails, no patch #2)', function(t) {
+  var ctx = {
+    options : {
+      patchLevel : 2,
+    },
+    currentPatchLevel : 0,
+    patches : {
+      '0' : {
+        '1' : '-- 0->1\n',
+      },
+    },
+  }
+
+  patcher.checkAllPatchesAvailable.call(ctx, function(err) {
+    t.ok(err, 'An error occurred since patch 2 is missing')
+
+    t.equal(err.message, 'Patch from level 1 to 2 does not exist', 'The error message is correct')
+
+    t.end()
+  })
+
+})
+
+test('check all patches are available (fails, no patch #1)', function(t) {
+  var ctx = {
+    options : {
+      patchLevel : 2,
+    },
+    currentPatchLevel : 0,
+    patches : {
+      '1' : {
+        '2' : '-- 1->2\n',
+      },
+    },
+  }
+
+  patcher.checkAllPatchesAvailable.call(ctx, function(err) {
+    t.ok(err, 'An error occurred since patch 1 is missing')
+
+    t.equal(err.message, 'Patch from level 0 to 1 does not exist', 'The error message is correct')
+
+    t.end()
+  })
+
 })

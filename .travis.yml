@@ -1,0 +1,26 @@
+language: node_js
+
+node_js:
+ - "0.10"
+
+services:
+ - mysql
+
+notifications:
+  email:
+    - achilton@mozilla.com
+  irc:
+    channels:
+      - "irc.mozilla.org#fxa"
+    use_notice: false
+    skip_join: false
+
+install:
+  - npm install --no-optional
+
+before_script:
+  - mysql -e 'DROP DATABASE IF EXISTS patcher'
+
+script:
+  - npm test
+

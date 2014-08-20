@@ -28,6 +28,7 @@
     "clone": "^0.1.18"
   },
   "devDependencies": {
+    "mysql": "^2.4.2",
     "tape": "^2.14.0"
   }
 }

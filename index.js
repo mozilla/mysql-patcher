@@ -17,18 +17,26 @@ var noop = Function.prototype // a No Op function
 function patch(options, callback) {
   // callback is required
   if ( typeof callback !== 'function' ) {
-    return callback(new Error('A callback must be provided'))
+    return callback(new Error('A callback is required'))
   }
 
   // check the required options
   if ( !options.dir ) {
-    return callback(new Error("Option 'dir' must be provided"))
+    return callback(new Error("Option 'dir' is required"))
+  }
+
+  if ( !('patchLevel' in options ) ) {
+    return callback(new Error("Option 'patchLevel' is required"))
   }
 
   // set some defaults
   options.metaTablename = options.metaTablename || 'dbMetadata'
   options.reversePatchAllowed = options.reversePatchAllowed || false
   options.patchKey = options.patchKey || 'patch'
+  options.createDatabase = options.createDatabase || false
+
+  // set this on the connection since we can have multiple statements in every patch
+  options.multipleStatements = true
 
   // ToDo: fill in once other supporting functions are complete
 
@@ -37,6 +45,7 @@ function patch(options, callback) {
   }
   async.series(
     [
+      createConnection.bind(context),
       createDatabase.bind(context),
       changeUser.bind(context),
       checkDbMetadataExists.bind(context),
@@ -44,7 +53,17 @@ function patch(options, callback) {
       readPatchFiles.bind(context),
       checkAllPatchesAvailable.bind(context),
       applyPatches.bind(context),
-    ], callback
+    ],
+    function(err) {
+      if ( !context.connection ) {
+        return callback(err)
+      }
+
+      context.connection.end(function(e) {
+        // ignore this error if there is one, callback with the original error
+        callback(err)
+      })
+    }
   )
 }
 
@@ -53,7 +72,7 @@ function createConnection(callback) {
   var opts = clone(this.options)
   delete opts.database
 
-  this.connection = mysql.createConnection(opts)
+  this.connection = this.options.mysql.createConnection(opts)
   this.connection.connect(function(err) {
     if (err) { return callback(err) }
     callback()
@@ -62,8 +81,8 @@ function createConnection(callback) {
 
 function createDatabase(callback) {
   if ( this.options.createDatabase ) {
-    connection.query(
-      'CREATE DATABASE IF NOT EXISTS ' + database + ' CHARACTER SET utf8 COLLATE utf8_unicode_ci',
+    this.connection.query(
+      'CREATE DATABASE IF NOT EXISTS ' + this.options.database + ' CHARACTER SET utf8 COLLATE utf8_unicode_ci',
       callback
     )    
   }
@@ -98,21 +117,20 @@ function checkDbMetadataExists(callback) {
 }
 
 function readDbPatchLevel(callback) {
-  var context = this
+  var ctx = this
 
-  if ( this.metaTableExists === false ) {
+  if ( ctx.metaTableExists === false ) {
     // the table doesn't exist, so start at patch level 0
-    context.currentPatchLevel = 0
+    ctx.currentPatchLevel = 0
     process.nextTick(callback)
     return
   }
 
   // find out what patch level the database is currently at
-  var d = P.defer()
   var query = "SELECT value FROM dbMetadata WHERE name = ?"
-  client.query(
+  ctx.connection.query(
     query,
-    [ options.patchKey ],
+    [ ctx.options.patchKey ],
     function(err, result) {
       if (err) { return callback(err) }
 
@@ -126,14 +144,13 @@ function readDbPatchLevel(callback) {
 function readPatchFiles(callback) {
   var ctx = this
 
-  var dir = ctx.dir
   ctx.patches = {}
 
-  fs.readdir(dir, function(err, files) {
+  fs.readdir(ctx.options.dir, function(err, files) {
     if (err) return callback(err)
 
     files = files.map(function(filename) {
-      return path.join(dir, filename)
+      return path.join(ctx.options.dir, filename)
     })
 
     async.eachLimit(

@@ -7,7 +7,7 @@
     "mysql-patcher": "./bin/mysql-patcher"
   },
   "scripts": {
-    "test": "tape test/*.js"
+    "test": "tape test/*.js | tap-spec"
   },
   "repository": {
     "type": "git",
@@ -29,6 +29,7 @@
   },
   "devDependencies": {
     "mysql": "^2.4.2",
+    "tap-spec": "^0.2.1",
     "tape": "^2.14.0"
   }
 }

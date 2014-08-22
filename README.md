@@ -28,6 +28,9 @@ patcher.patch(options, function(err, res) {
 })
 ```
 
+Note: you should require mysql yourself and pass this to `.patch()` so that we're using the version you
+want, instead of us depending on mysql ourselves.
+
 ## .patch(options) ##
 
 The options are passed straight through to MySql, so you can provide any of the following:
@@ -104,5 +107,9 @@ e.g. Reverse patch file : `patch-02-01.sql`
 ```
 UPDATE dbMetadata SET value = '1' WHERE name = 'schema-patch-level';
 ```
+
+## License ##
+
+[Mozilla Public License v2](https://www.mozilla.org/MPL/2.0/)
 
 (Ends)

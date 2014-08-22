@@ -165,7 +165,7 @@ test('checking that these patch files are executed', function(t) {
   })
 })
 
-test('checking that an error comes back if the query fails', function(t) {
+test('checking that an error comes back if a patch is missing', function(t) {
   t.plan(3)
 
   var count = 0

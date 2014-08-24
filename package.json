@@ -3,9 +3,6 @@
   "version": "0.1.0",
   "description": "A package/program to help patch MySql databases",
   "main": "index.js",
-  "bin": {
-    "mysql-patcher": "./bin/mysql-patcher"
-  },
   "scripts": {
     "test": "tape test/*.js | tap-spec"
   },

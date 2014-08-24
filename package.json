@@ -16,7 +16,7 @@
   "keywords": [
     "mysql"
   ],
-  "author": "Andrew Chilton",
+  "author": "Andrew Chilton <andychilton@gmail.com> (http://chilts.org/)",
   "license": "MPL2",
   "bugs": {
     "url": "https://github.com/chilts/mysql-patcher/issues"

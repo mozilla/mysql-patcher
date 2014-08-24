@@ -15,10 +15,7 @@ var noop = Function.prototype // a No Op function
 
 // the main export from this package
 function patch(options, callback) {
-  // callback is required
-  if ( typeof callback !== 'function' ) {
-    return callback(new Error('A callback is required'))
-  }
+  callback = callback || noop
 
   // check the required options
   if ( !options.dir ) {

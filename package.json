@@ -1,6 +1,6 @@
 {
   "name": "mysql-patcher",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A package/program to help patch MySql databases",
   "main": "index.js",
   "scripts": {

@@ -131,8 +131,15 @@ function readDbPatchLevel(callback) {
     function(err, result) {
       if (err) { return callback(err) }
 
-      // convert the patch level from a string to a number
-      ctx.currentPatchLevel = +result[0].value
+      if ( result.length === 0 ) {
+        // nothing in the table yet
+        ctx.currentPatchLevel = 0
+      }
+      else {
+        // convert the patch level from a string to a number
+        ctx.currentPatchLevel = +result[0].value
+      }
+
       callback()
     }
   )

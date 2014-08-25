@@ -19,6 +19,7 @@ var options = {
   dir        : path.join(__dirname, 'schema'),
   patchKey   : 'schema-patch-level',
   patchLevel : 4,
+  metaTable  : 'dbMetadata',
   mysql      : mysql,
 }
 

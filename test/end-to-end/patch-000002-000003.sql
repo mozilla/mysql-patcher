@@ -4,4 +4,4 @@ CREATE TABLE kv (
   createdAt BIGINT UNSIGNED NOT NULL
 ) ENGINE=InnoDB;
 
-UPDATE dbMetadata SET value = '3' WHERE name = 'schema-patch-level';
+UPDATE metadata SET value = '3' WHERE name = 'schema-patch-level';

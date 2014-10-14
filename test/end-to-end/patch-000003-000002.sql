@@ -1,3 +1,3 @@
 DROP TABLE kv;
 
-UPDATE dbMetadata SET value = '2' WHERE name = 'schema-patch-level';
+UPDATE metadata SET value = '2' WHERE name = 'schema-patch-level';

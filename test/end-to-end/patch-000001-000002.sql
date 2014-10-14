@@ -4,4 +4,4 @@ CREATE TABLE accounts (
   createdAt BIGINT UNSIGNED NOT NULL
 ) ENGINE=InnoDB;
 
-UPDATE dbMetadata SET value = '2' WHERE name = 'schema-patch-level';
+UPDATE metadata SET value = '2' WHERE name = 'schema-patch-level';

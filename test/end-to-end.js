@@ -14,6 +14,7 @@ var options = {
   database   : 'patcher',
   // password   : '',
   dir        : path.join(__dirname, 'end-to-end'),
+  metaTable  : 'metadata',
   patchKey   : 'schema-patch-level',
   patchLevel : 3,
   mysql      : mysql,
@@ -27,14 +28,15 @@ test('run an end to end test, with no error (to patch 0)', function(t) {
   options.patchLevel = 0
 
   patcher.patch(options, function(err, res) {
+    console.log(err, res)
     t.ok(!err, 'There was no error when patching the database')
 
-    // create a connection and check the dbMetadata key has been updated to 3
-    connection.query("SELECT value FROM dbMetadata WHERE name = 'schema-patch-level'", function(err, res) {
+    // create a connection and check the metadata key has been updated to 3
+    connection.query("SELECT value FROM metadata WHERE name = 'schema-patch-level'", function(err, res) {
       t.ok(err, 'There was an error getting the database patch level')
-      t.equal(err.code, 'ER_NO_SUCH_TABLE', 'No dbMetadata table')
+      t.equal(err.code, 'ER_NO_SUCH_TABLE', 'No metadata table')
       t.equal(err.errno, 1146, 'Correct error number')
-      t.equal(err.message, "ER_NO_SUCH_TABLE: Table 'patcher.dbMetadata' doesn't exist", 'Correct message')
+      t.equal(err.message, "ER_NO_SUCH_TABLE: Table 'patcher.metadata' doesn't exist", 'Correct message')
 
       t.end()
     })
@@ -48,8 +50,8 @@ test('run an end to end test, with no error(to patch 3)', function(t) {
   patcher.patch(options, function(err, res) {
     t.ok(!err, 'There was no error when patching the database')
 
-    // create a connection and check the dbMetadata key has been updated to 3
-    connection.query("SELECT value FROM dbMetadata WHERE name = 'schema-patch-level'", function(err, res) {
+    // create a connection and check the metadata key has been updated to 3
+    connection.query("SELECT value FROM metadata WHERE name = 'schema-patch-level'", function(err, res) {
       t.ok(!err, 'There was no error getting the database patch level')
 
       t.equal(res[0].value, '3', 'The database patch level is correct')

@@ -27,7 +27,7 @@ function patch(options, callback) {
   }
 
   // set some defaults
-  options.metaTablename = options.metaTablename || 'dbMetadata'
+  options.metaTable = options.metaTable || 'dbMetadata'
   options.reversePatchAllowed = options.reversePatchAllowed || false
   options.patchKey = options.patchKey || 'patch'
   options.createDatabase = options.createDatabase || false
@@ -104,7 +104,7 @@ function checkDbMetadataExists(callback) {
   var query = "SELECT COUNT(*) AS count FROM information_schema.TABLES WHERE table_schema = ? AND table_name = ?"
   this.connection.query(
     query,
-    [ this.options.database, this.options.metaTablename ],
+    [ this.options.database, this.options.metaTable ],
     function (err, result) {
       if (err) { return callback(err) }
       context.metaTableExists = result[0].count === 0 ? false : true
@@ -124,7 +124,7 @@ function readDbPatchLevel(callback) {
   }
 
   // find out what patch level the database is currently at
-  var query = "SELECT value FROM dbMetadata WHERE name = ?"
+  var query = "SELECT value FROM " + ctx.options.metaTable +  " WHERE name = ?"
   ctx.connection.query(
     query,
     [ ctx.options.patchKey ],

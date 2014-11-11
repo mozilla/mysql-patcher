@@ -27,7 +27,7 @@ function patch(options, callback) {
   }
 
   // set some defaults
-  options.metaTable = options.metaTable || 'dbMetadata'
+  options.metaTable = options.metaTable || 'metadata'
   options.reversePatchAllowed = options.reversePatchAllowed || false
   options.patchKey = options.patchKey || 'patch'
   options.createDatabase = options.createDatabase || false

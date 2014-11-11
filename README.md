@@ -19,7 +19,7 @@ var options = {
   dir        : path.join(__dirname, 'schema'),
   patchKey   : 'schema-patch-level',
   patchLevel : 4,
-  metaTable  : 'dbMetadata',
+  metaTable  : 'metadata',
   mysql      : mysql,
 }
 
@@ -78,18 +78,18 @@ If you don't know what to do, copy and paste these two files for your initial fo
 e.g. Forward patch file : `patch-00-01.sql`
 
 ```
-CREATE TABLE dbMetadata (
+CREATE TABLE metadata (
   name VARCHAR(255) NOT NULL PRIMARY KEY,
   value VARCHAR(255) NOT NULL
 ) ENGINE=InnoDB;
 
-INSERT INTO dbMetadata SET name = 'schema-patch-level', value = '1';
+INSERT INTO metadata SET name = 'schema-patch-level', value = '1';
 ```
 
 e.g. Reverse patch file : `patch-01-00.sql`
 
 ```
-DROP TABLE dbMetadata;
+DROP TABLE metadata;
 ```
 
 ### Patches 2 and above ###
@@ -100,13 +100,13 @@ patch level, but instead update it:
 e.g. Forward patch file : `patch-01-02.sql`
 
 ```
-UPDATE dbMetadata SET value = '2' WHERE name = 'schema-patch-level';
+UPDATE metadata SET value = '2' WHERE name = 'schema-patch-level';
 ```
 
 e.g. Reverse patch file : `patch-02-01.sql`
 
 ```
-UPDATE dbMetadata SET value = '1' WHERE name = 'schema-patch-level';
+UPDATE metadata SET value = '1' WHERE name = 'schema-patch-level';
 ```
 
 ## License ##

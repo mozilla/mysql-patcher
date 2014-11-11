@@ -1,6 +1,6 @@
 # mysql-patcher #
 
-A package/program to help patch MySql databases.
+A package/program to help patch MySql databases. [![Build Status](https://api.travis-ci.org/chilts/mysql-patcher.svg)](https://travis-ci.org/chilts/mysql-patcher)
 
 ## Synopsis ##
 

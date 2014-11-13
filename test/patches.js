@@ -145,24 +145,39 @@ test('check all patches are available (fails, no patch #1)', function(t) {
 test('checking that these patch files are executed', function(t) {
   var count = 0
   var ctx = {
+    options : {
+      dir       : path.join(__dirname, 'end-to-end'),
+      metaTable : 'metadata',
+      patchKey  : 'schema-patch-level',
+    },
     connection : {
-      query : function(sql, callback) {
+      query : function(sql, args, callback) {
+        if ( typeof callback === 'undefined' ) {
+          callback = args
+          args = undefined
+        }
+        // if this query is the patcher trying to get the patch level, ignore it
+        if ( sql.match(/SELECT value FROM metadata WHERE name/) ) {
+          return callback(null, [])
+        }
         t.equal(sql, ctx.patchesToApply[count].sql, 'SQL is correct')
         count += 1
-        callback()
+        callback(null, [])
       },
     },
-    patchesToApply : [
-      { sql : '-- 0->1' },
-      { sql : '-- 1->2' },
-      { sql : '-- 2->3' },
-    ],
   }
 
-  patcher.applyPatches.call(ctx, function(err) {
+  patcher.readPatchFiles.call(ctx, function(err) {
     t.ok(!err, 'No error occurred')
-    t.end()
+    patcher.checkAllPatchesAvailable.call(ctx, function(err) {
+      t.ok(!err, 'No error occurred')
+      patcher.applyPatches.call(ctx, function(err) {
+        t.ok(!err, 'No error occurred')
+        t.end()
+      })
+    })
   })
+
 })
 
 test('checking that an error comes back if a patch is missing', function(t) {
@@ -170,15 +185,19 @@ test('checking that an error comes back if a patch is missing', function(t) {
 
   var count = 0
   var ctx = {
+    options : {
+      metaTable : 'metadata',
+      patchKey  : 'level',
+    },
+    patchesToApply : [
+      { sql : '-- 0->1' },
+    ],
     connection : {
       query : function(sql, callback) {
         t.equal(sql, '-- 0->1', 'The sql is what is expected')
         callback(new Error('Something went wrong'))
       },
     },
-    patchesToApply : [
-      { sql : '-- 0->1' },
-    ],
   }
 
   patcher.applyPatches.call(ctx, function(err) {

@@ -13,6 +13,8 @@ var clone = require('clone')
 // globals for this package
 var noop = Function.prototype // a No Op function
 
+var ERR_NO_SUCH_TABLE = 1146
+
 // the main export from this package
 function patch(options, callback) {
   callback = callback || noop
@@ -100,14 +102,14 @@ function changeUser(callback) {
 }
 
 function checkDbMetadataExists(callback) {
-  var context = this
+  var ctx = this
   var query = "SELECT COUNT(*) AS count FROM information_schema.TABLES WHERE table_schema = ? AND table_name = ?"
   this.connection.query(
     query,
-    [ this.options.database, this.options.metaTable ],
+    [ ctx.options.database, ctx.options.metaTable ],
     function (err, result) {
       if (err) { return callback(err) }
-      context.metaTableExists = result[0].count === 0 ? false : true
+      ctx.metaTableExists = result[0].count === 0 ? false : true
       callback()
     }
   )
@@ -229,7 +231,43 @@ function applyPatches(callback) {
     ctx.patchesToApply,
     function(patch, donePatch) {
       // emit : 'Updating DB for patch ' + patch.from + ' to ' + patch.to
-      ctx.connection.query(patch.sql, donePatch)
+      ctx.connection.query(patch.sql, function(err, info) {
+        if (err) return donePatch(err)
+
+        // check that the database is now at the (intermediate) patch level
+        var query = "SELECT value FROM " + ctx.options.metaTable +  " WHERE name = ?"
+        ctx.connection.query(
+          query,
+          [ ctx.options.patchKey ],
+          function(err, result) {
+            if (err) {
+              // this is not an error if we are wanting to patch to level 0
+              // and the problem is that the metaTable is not there
+              if ( patch.to === 0 && err.errno === ERR_NO_SUCH_TABLE ) {
+                return donePatch()
+              }
+
+              // otherwise, return this error since we don't know what it is
+              return donePatch(err)
+            }
+
+            if ( result.length === 0 ) {
+              // nothing in the table yet
+              return donePatch(new Error('The patchKey does not exist in the metaTable'))
+            }
+
+            // convert the patch level from a string to a number
+            result[0].value = +result[0].value
+
+            // check if this value is incorrect
+            if ( result[0].value !== patch.to ) {
+              return donePatch(new Error('Patch level in metaTable (%s) is incorrect after this patch (%s)', result[0].value, patch.to))
+            }
+
+            donePatch()
+          }
+        )
+      })
     },
     callback
   )

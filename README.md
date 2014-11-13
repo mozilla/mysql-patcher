@@ -109,6 +109,12 @@ e.g. Reverse patch file : `patch-02-01.sql`
 UPDATE metadata SET value = '1' WHERE name = 'schema-patch-level';
 ```
 
+## Changelog ##
+
+### v0.4.0 - 2014-11-14 ###
+
+* added a check between patches to make sure the patch level was incremented properly
+
 ## License ##
 
 [Mozilla Public License v2](https://www.mozilla.org/MPL/2.0/)

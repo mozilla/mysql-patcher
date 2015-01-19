@@ -54,13 +54,21 @@ function patch(options, callback) {
       applyPatches.bind(context),
     ],
     function(err) {
-      if ( !context.connection ) {
+      // firstly check for errors
+      if (err) {
+        // close the connection if we have one open
+        if ( context.connection ) {
+          context.connection.end(function(err) {
+            // ignore any errors here since we already have one
+          })
+        }
         return callback(err)
       }
 
-      context.connection.end(function(e) {
+      // all ok, so just close the connection normally
+      context.connection.end(function(err2) {
         // ignore this error if there is one, callback with the original error
-        callback(err)
+        callback(err2)
       })
     }
   )
@@ -73,7 +81,9 @@ function createConnection(callback) {
 
   this.connection = this.options.mysql.createConnection(opts)
   this.connection.connect(function(err) {
-    if (err) { return callback(err) }
+    if (err) {
+      return callback(err)
+    }
     callback()
   })
 }

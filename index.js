@@ -217,7 +217,7 @@ function checkAllPatchesAvailable(callback) {
     // check that this patch exists
     if ( !ctx.patches[currentPatchLevel] || !ctx.patches[currentPatchLevel][nextPatchLevel] ) {
       process.nextTick(function() {
-        callback(new Error('Patch from level ' + currentPatchLevel + ' to ' + (currentPatchLevel+1) + ' does not exist'))
+        callback(new Error('Patch from level ' + currentPatchLevel + ' to ' + nextPatchLevel + ' does not exist'))
       })
       return
     }

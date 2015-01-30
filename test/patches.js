@@ -5,19 +5,20 @@ var path = require('path')
 
 var test = require('tape')
 var patcher = require('../')
+var mockMySQL = require('./mock-mysql')
 
 test('read patch set (ok)', function (t) {
-  var ctx = {
-    options : {
-      dir : path.join(__dirname, 'patches'),
-    },
-  }
 
-  // call readPatchFiles() with the above context
-  patcher.readPatchFiles.call(ctx, function(err) {
+  var p = new patcher({
+    dir : path.join(__dirname, 'patches'),
+    patchLevel : 0,
+    mysql : mockMySQL()
+  })
+
+  p.readPatchFiles(function(err) {
     t.ok(!err, 'No error occurred')
 
-    var patches = ctx.patches
+    var patches = p.patches
 
     // check there are 3 patch levels
     var levels = Object.keys(patches).length
@@ -39,29 +40,30 @@ test('read patch set (ok)', function (t) {
 })
 
 test('check all patches are available (forwards)', function(t) {
-  var ctx = {
-    options : {
-      patchLevel : 2,
+
+  var p = new patcher({
+    patchLevel : 2,
+    dir : "nonexistent",
+    mysql : mockMySQL()
+  })
+  p.currentPatchLevel = 0
+  p.patches = {
+    '0' : {
+      '1' : '-- 0->1\n',
     },
-    currentPatchLevel : 0,
-    patches : {
-      '0' : {
-        '1' : '-- 0->1\n',
-      },
-      '1' : {
-        '2' : '-- 1->2\n',
-      },
-    },
+    '1' : {
+      '2' : '-- 1->2\n',
+    }
   }
 
-  patcher.checkAllPatchesAvailable.call(ctx, function(err) {
+  p.checkAllPatchesAvailable(function(err) {
     t.ok(!err, 'No error occurred')
 
     var patches = [
       { sql : '-- 0->1\n', from : 0, to : 1, },
       { sql : '-- 1->2\n', from : 1, to : 2, },
     ]
-    t.deepEqual(ctx.patchesToApply, patches, 'The patches to be applied')
+    t.deepEqual(p.patchesToApply, patches, 'The patches to be applied')
 
     t.end()
   })
@@ -69,29 +71,29 @@ test('check all patches are available (forwards)', function(t) {
 })
 
 test('check all patches are available (backwards)', function(t) {
-  var ctx = {
-    options : {
-      patchLevel : 0,
+  var p = new patcher({
+    patchLevel : 0,
+    dir : "nonexistent",
+    mysql : mockMySQL()
+  })
+  p.currentPatchLevel = 2
+  p.patches = {
+    '2' : {
+      '1' : '-- 2->1\n',
     },
-    currentPatchLevel : 2,
-    patches : {
-      '2' : {
-        '1' : '-- 2->1\n',
-      },
-      '1' : {
-        '0' : '-- 1->0\n',
-      },
-    },
+    '1' : {
+      '0' : '-- 1->0\n',
+    }
   }
 
-  patcher.checkAllPatchesAvailable.call(ctx, function(err) {
+  p.checkAllPatchesAvailable(function(err) {
     t.ok(!err, 'No error occurred')
 
     var patches = [
       { sql : '-- 2->1\n', from : 2, to : 1, },
       { sql : '-- 1->0\n', from : 1, to : 0, },
     ]
-    t.deepEqual(ctx.patchesToApply, patches, 'The patches to be applied')
+    t.deepEqual(p.patchesToApply, patches, 'The patches to be applied')
 
     t.end()
   })
@@ -99,19 +101,19 @@ test('check all patches are available (backwards)', function(t) {
 })
 
 test('check all patches are available (fails, no patch #2)', function(t) {
-  var ctx = {
-    options : {
-      patchLevel : 2,
-    },
-    currentPatchLevel : 0,
-    patches : {
-      '0' : {
-        '1' : '-- 0->1\n',
-      },
-    },
+  var p = new patcher({
+    patchLevel : 2,
+    dir : "nonexistent",
+    mysql : mockMySQL()
+  })
+  p.currentPatchLevel = 0
+  p.patches = {
+    '0' : {
+      '1' : '-- 0->1\n',
+    }
   }
 
-  patcher.checkAllPatchesAvailable.call(ctx, function(err) {
+  p.checkAllPatchesAvailable(function(err) {
     t.ok(err, 'An error occurred since patch 2 is missing')
 
     t.equal(err.message, 'Patch from level 1 to 2 does not exist', 'The error message is correct')
@@ -121,19 +123,19 @@ test('check all patches are available (fails, no patch #2)', function(t) {
 })
 
 test('check all patches are available (fails, no patch #1)', function(t) {
-  var ctx = {
-    options : {
-      patchLevel : 2,
-    },
-    currentPatchLevel : 0,
-    patches : {
-      '1' : {
-        '2' : '-- 1->2\n',
-      },
-    },
+  var p = new patcher({
+    patchLevel : 2,
+    dir : "nonexistent",
+    mysql : mockMySQL()
+  })
+  p.currentPatchLevel = 0
+  p.patches = {
+    '1' : {
+      '2' : '-- 1->2\n',
+    }
   }
 
-  patcher.checkAllPatchesAvailable.call(ctx, function(err) {
+  p.checkAllPatchesAvailable(function(err) {
     t.ok(err, 'An error occurred since patch 1 is missing')
 
     t.equal(err.message, 'Patch from level 0 to 1 does not exist', 'The error message is correct')
@@ -144,13 +146,12 @@ test('check all patches are available (fails, no patch #1)', function(t) {
 
 test('checking that these patch files are executed', function(t) {
   var count = 0
-  var ctx = {
-    options : {
-      dir       : path.join(__dirname, 'end-to-end'),
-      metaTable : 'metadata',
-      patchKey  : 'schema-patch-level',
-    },
-    connection : {
+  var p = new patcher({
+    dir : path.join(__dirname, 'end-to-end'),
+    metaTable : 'metadata',
+    patchKey : 'schema-patch-level',
+    patchLevel : 0,
+    mysql : mockMySQL({
       query : function(sql, args, callback) {
         if ( typeof callback === 'undefined' ) {
           callback = args
@@ -160,20 +161,24 @@ test('checking that these patch files are executed', function(t) {
         if ( sql.match(/SELECT value FROM metadata WHERE name/) ) {
           return callback(null, [])
         }
-        t.equal(sql, ctx.patchesToApply[count].sql, 'SQL is correct')
+        t.equal(sql, p.patchesToApply[count].sql, 'SQL is correct')
         count += 1
         callback(null, [])
-      },
-    },
-  }
+      }
+    })
+  })
+  p.currentPatchLevel = 0
 
-  patcher.readPatchFiles.call(ctx, function(err) {
+  p.createConnection(function(err) {
     t.ok(!err, 'No error occurred')
-    patcher.checkAllPatchesAvailable.call(ctx, function(err) {
+    p.readPatchFiles(function(err) {
       t.ok(!err, 'No error occurred')
-      patcher.applyPatches.call(ctx, function(err) {
+      p.checkAllPatchesAvailable(function(err) {
         t.ok(!err, 'No error occurred')
-        t.end()
+        p.applyPatches(function(err) {
+          t.ok(!err, 'No error occurred')
+          t.end()
+        })
       })
     })
   })
@@ -181,28 +186,30 @@ test('checking that these patch files are executed', function(t) {
 })
 
 test('checking that an error comes back if a patch is missing', function(t) {
-  t.plan(3)
+  t.plan(4)
 
-  var count = 0
-  var ctx = {
-    options : {
-      metaTable : 'metadata',
-      patchKey  : 'level',
-    },
-    patchesToApply : [
-      { sql : '-- 0->1' },
-    ],
-    connection : {
+  var p = new patcher({
+    metaTable : 'metadata',
+    patchKey  : 'level',
+    patchLevel : 0,
+    dir : "nonexistent",
+    mysql : mockMySQL({
       query : function(sql, callback) {
         t.equal(sql, '-- 0->1', 'The sql is what is expected')
         callback(new Error('Something went wrong'))
-      },
-    },
-  }
+      }
+    })
+  })
+  p.patchesToApply = [
+      { sql : '-- 0->1' },
+  ]
 
-  patcher.applyPatches.call(ctx, function(err) {
-    t.ok(err, 'An error occurred')
-    t.equal(err.message, 'Something went wrong', 'The message is correct')
-    t.end()
+  p.createConnection(function(err) {
+    t.ok(!err, 'No error occurred')
+    p.applyPatches(function(err) {
+      t.ok(err, 'An error occurred')
+      t.equal(err.message, 'Something went wrong', 'The message is correct')
+      t.end()
+    })
   })
 })

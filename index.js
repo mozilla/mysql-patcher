@@ -54,7 +54,11 @@ function Patcher(options) {
 
 }
 
-Patcher.prototype.patch = function patch(callback) {
+
+// Public API methods to connect and disconnect from the database,
+// and patch to the desired level.
+
+Patcher.prototype.connect = function connect(callback) {
   async.series(
     [
       this.createConnection.bind(this),
@@ -62,30 +66,50 @@ Patcher.prototype.patch = function patch(callback) {
       this.changeUser.bind(this),
       this.checkDbMetadataExists.bind(this),
       this.readDbPatchLevel.bind(this),
+    ],
+    (function(err) {
+      // Ensure we close the connection on error.
+      if (err) {
+        if (this.connection) {
+          this.connection.end(noop)
+          this.connection = null
+        }
+        return callback(err)
+      }
+      return callback()
+    }).bind(this)
+  )
+}
+
+Patcher.prototype.end = function end(callback) {
+  // Allow calling end() even if connect() failed, so that it's
+  // easier for folks to clean up after themselves.
+  if (this.connection) {
+    this.connection.end(callback)
+    this.connection = null
+  } else {
+    process.nextTick(callback)
+  }
+}
+
+Patcher.prototype.patch = function patch(callback) {
+  if (!this.connection) {
+    callback('must call connect() before calling patch()')
+  }
+  async.series(
+    [
       this.readPatchFiles.bind(this),
       this.checkAllPatchesAvailable.bind(this),
       this.applyPatches.bind(this),
     ],
-    (function(err) {
-      // firstly check for errors
-      if (err) {
-        // close the connection if we have one open
-        if ( this.connection ) {
-          this.connection.end(function(err) {
-            // ignore any errors here since we already have one
-          })
-        }
-        return callback(err)
-      }
-
-      // all ok, so just close the connection normally
-      this.connection.end(function(err2) {
-        // ignore this error if there is one, callback with the original error
-        callback(err2)
-      })
-    }).bind(this)
+    callback
   )
 }
+
+
+// Lower-level utility methods.
+// These are factored out to make for a nice clean async control flow
+// but probably shouldn't be called by external code.
 
 Patcher.prototype.createConnection = function createConnection(callback) {
   // when creating the database, we need to connect without a database name
@@ -255,7 +279,7 @@ Patcher.prototype.applyPatches = function applyPatches(callback) {
         this.connection.query(
           query,
           [ this.options.patchKey ],
-          function(err, result) {
+          (function(err, result) {
             if (err) {
               // this is not an error if we are wanting to patch to level 0
               // and the problem is that the metaTable is not there
@@ -280,19 +304,24 @@ Patcher.prototype.applyPatches = function applyPatches(callback) {
               return donePatch(new Error('Patch level in metaTable (%s) is incorrect after this patch (%s)', result[0].value, patch.to))
             }
 
+            this.currentPatchLevel = result[0].value
             donePatch()
-          }
+          }).bind(this)
         )
       }).bind(this))
     }).bind(this),
-    callback
+    (function(err) {
+      // Update our internal state if a patch created the db metadata table.
+      if (this.metaTableExists) {
+        callback(err)
+      } else {
+        this.checkDbMetadataExists(function(err2) {
+          callback(err || err2)
+        })
+      }
+    }).bind(this)
   )
 }
-
-Patcher.prototype.closeConnection = function closeConnection(callback) {
-  this.connection.end(callback)
-}
-
 
 
 // A much simpler, stateless function for just doing a patch.
@@ -306,7 +335,17 @@ Patcher.patch = function patch(options, callback) {
     return callback(err);
   }
 
-  patcher.patch(callback);
+  patcher.connect(function(err) {
+    if (err) {
+      return callback(err)
+    }
+    patcher.patch(function(err) {
+      // Always close the connection, but preserve original error.
+      patcher.end(function(err2) {
+        return callback(err || err2)
+      })
+    })
+  })
 
 }
 

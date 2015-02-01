@@ -157,9 +157,12 @@ test('checking that these patch files are executed', function(t) {
           callback = args
           args = undefined
         }
-        // if this query is the patcher trying to get the patch level, ignore it
+        // Mock out db-metadata-related queries.
         if ( sql.match(/SELECT value FROM metadata WHERE name/) ) {
           return callback(null, [])
+        }
+        if ( sql.match(/SELECT .+ AS count FROM information_schema/) ) {
+          return callback(null, [{count: 0}])
         }
         t.equal(sql, p.patchesToApply[count].sql, 'SQL is correct')
         count += 1
@@ -194,7 +197,15 @@ test('checking that an error comes back if a patch is missing', function(t) {
     patchLevel : 0,
     dir : "nonexistent",
     mysql : mockMySQL({
-      query : function(sql, callback) {
+      query : function(sql, args, callback) {
+        if ( typeof callback === 'undefined' ) {
+          callback = args
+          args = undefined
+        }
+        // Mock out db-metadata-related queries.
+        if ( sql.match(/SELECT .+ AS count FROM information_schema/) ) {
+          return callback(null, [{count: 0}])
+        }
         t.equal(sql, '-- 0->1', 'The sql is what is expected')
         callback(new Error('Something went wrong'))
       }

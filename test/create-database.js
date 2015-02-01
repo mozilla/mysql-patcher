@@ -4,13 +4,13 @@
 var path = require('path')
 
 var test = require('tape')
-var patcher = require('../')
+var Patcher = require('../')
 var mockMySQL = require('./mock-mysql')
 
 test('check that createDatabase is being called when asked for', function(t) {
   t.plan(3)
 
-  var p = new patcher({
+  var p = new Patcher({
     database : 'database',
     createDatabase : true,
     dir: 'nonexistent',
@@ -35,7 +35,7 @@ test('check that createDatabase is being called when asked for', function(t) {
 test('check that createDatabase is not being called when false', function(t) {
   t.plan(2)
 
-  var p = new patcher({
+  var p = new Patcher({
     database : 'database',
     createDatabase : false,
     dir: 'nonexistent',

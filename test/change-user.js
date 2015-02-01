@@ -4,7 +4,7 @@
 var path = require('path')
 
 var test = require('tape')
-var patcher = require('../')
+var Patcher = require('../')
 var mockMySQL = require('./mock-mysql')
 
 test('check that the changeUser is doing the right thing', function(t) {
@@ -25,7 +25,7 @@ test('check that the changeUser is doing the right thing', function(t) {
       }
     })
   }
-  var p = new patcher(options);
+  var p = new Patcher(options);
   p.createConnection(function(err) {
     t.ok(!err, 'No error occurred')
     p.changeUser(function(err) {

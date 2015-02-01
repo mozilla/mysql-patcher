@@ -15,66 +15,103 @@ var noop = Function.prototype // a No Op function
 
 var ERR_NO_SUCH_TABLE = 1146
 
-// the main export from this package
-function patch(options, callback) {
-  callback = callback || noop
+
+// A stateful Patcher class for interacting with the db.
+// This is the main export form this module.
+
+function Patcher(options) {
+  this.options = clone(options)
 
   // check the required options
-  if ( !options.dir ) {
-    return callback(new Error("Option 'dir' is required"))
+  if ( !this.options.dir ) {
+    throw new Error("Option 'dir' is required")
   }
 
-  if ( !('patchLevel' in options ) ) {
-    return callback(new Error("Option 'patchLevel' is required"))
+  if ( !('patchLevel' in this.options ) ) {
+    throw new Error("Option 'patchLevel' is required")
+  }
+
+  if ( !this.options.mysql || !this.options.mysql.createConnection ) {
+    throw new Error("Option 'mysql' must be a mysql module object")
   }
 
   // set some defaults
-  options.metaTable = options.metaTable || 'metadata'
-  options.reversePatchAllowed = options.reversePatchAllowed || false
-  options.patchKey = options.patchKey || 'patch'
-  options.createDatabase = options.createDatabase || false
+  this.options.metaTable = this.options.metaTable || 'metadata'
+  this.options.reversePatchAllowed = this.options.reversePatchAllowed || false
+  this.options.patchKey = this.options.patchKey || 'patch'
+  this.options.createDatabase = this.options.createDatabase || false
 
-  // set this on the connection since we can have multiple statements in every patch
-  options.multipleStatements = true
+  // set this on the connection since we can have multiple statements
+  // in every patch
+  this.options.multipleStatements = true
 
-  // ToDo: fill in once other supporting functions are complete
+  // some stub properties, mostly for documentation purposes.
+  this.connection = null
+  this.metaTableExists = undefined
+  this.currentPatchLevel = undefined
+  this.patches = {}
+  this.patchesToApply = []
 
-  var context = {
-    options : options,
-  }
+}
+
+
+// Public API methods to connect and disconnect from the database,
+// and patch to the desired level.
+
+Patcher.prototype.connect = function connect(callback) {
   async.series(
     [
-      createConnection.bind(context),
-      createDatabase.bind(context),
-      changeUser.bind(context),
-      checkDbMetadataExists.bind(context),
-      readDbPatchLevel.bind(context),
-      readPatchFiles.bind(context),
-      checkAllPatchesAvailable.bind(context),
-      applyPatches.bind(context),
+      this.createConnection.bind(this),
+      this.createDatabase.bind(this),
+      this.changeUser.bind(this),
+      this.checkDbMetadataExists.bind(this),
+      this.readDbPatchLevel.bind(this),
     ],
-    function(err) {
-      // firstly check for errors
+    (function(err) {
+      // Ensure we close the connection on error.
       if (err) {
-        // close the connection if we have one open
-        if ( context.connection ) {
-          context.connection.end(function(err) {
-            // ignore any errors here since we already have one
-          })
+        if (this.connection) {
+          this.connection.end(noop)
+          this.connection = null
         }
         return callback(err)
       }
-
-      // all ok, so just close the connection normally
-      context.connection.end(function(err2) {
-        // ignore this error if there is one, callback with the original error
-        callback(err2)
-      })
-    }
+      return callback()
+    }).bind(this)
   )
 }
 
-function createConnection(callback) {
+Patcher.prototype.end = function end(callback) {
+  // Allow calling end() even if connect() failed, so that it's
+  // easier for folks to clean up after themselves.
+  if (this.connection) {
+    this.connection.end(callback)
+    this.connection = null
+  } else {
+    process.nextTick(callback)
+  }
+}
+
+Patcher.prototype.patch = function patch(callback) {
+  if (!this.connection) {
+    callback('must call connect() before calling patch()')
+  }
+  async.series(
+    [
+      this.readPatchFiles.bind(this),
+      this.checkAllPatchesAvailable.bind(this),
+      this.applyPatches.bind(this),
+    ],
+    callback
+  )
+}
+
+
+// Lower-level utility methods.
+// These are factored out to make for a nice clean async control flow
+// but probably shouldn't be called by external code.
+
+Patcher.prototype.createConnection = function createConnection(callback) {
   // when creating the database, we need to connect without a database name
   var opts = clone(this.options)
   delete opts.database
@@ -88,7 +125,7 @@ function createConnection(callback) {
   })
 }
 
-function createDatabase(callback) {
+Patcher.prototype.createDatabase = function createDatabase(callback) {
   if ( this.options.createDatabase ) {
     this.connection.query(
       'CREATE DATABASE IF NOT EXISTS ' + this.options.database + ' CHARACTER SET utf8 COLLATE utf8_unicode_ci',
@@ -100,7 +137,7 @@ function createDatabase(callback) {
   }
 }
 
-function changeUser(callback) {
+Patcher.prototype.changeUser = function changeUser(callback) {
   this.connection.changeUser(
     {
       user     : this.options.user,
@@ -111,68 +148,64 @@ function changeUser(callback) {
   )
 }
 
-function checkDbMetadataExists(callback) {
-  var ctx = this
+Patcher.prototype.checkDbMetadataExists = function checkDbMetadataExists(callback) {
   var query = "SELECT COUNT(*) AS count FROM information_schema.TABLES WHERE table_schema = ? AND table_name = ?"
   this.connection.query(
     query,
-    [ ctx.options.database, ctx.options.metaTable ],
-    function (err, result) {
+    [ this.options.database, this.options.metaTable ],
+    (function (err, result) {
       if (err) { return callback(err) }
-      ctx.metaTableExists = result[0].count === 0 ? false : true
+      this.metaTableExists = result[0].count === 0 ? false : true
       callback()
-    }
+    }).bind(this)
   )
 }
 
-function readDbPatchLevel(callback) {
-  var ctx = this
-
-  if ( ctx.metaTableExists === false ) {
+Patcher.prototype.readDbPatchLevel = function readDbPatchLevel(callback) {
+  if ( this.metaTableExists === false ) {
     // the table doesn't exist, so start at patch level 0
-    ctx.currentPatchLevel = 0
+    this.currentPatchLevel = 0
     process.nextTick(callback)
     return
   }
 
   // find out what patch level the database is currently at
-  var query = "SELECT value FROM " + ctx.options.metaTable +  " WHERE name = ?"
-  ctx.connection.query(
+  var query = "SELECT value FROM " + this.options.metaTable +  " WHERE name = ?"
+  this.connection.query(
     query,
-    [ ctx.options.patchKey ],
-    function(err, result) {
+    [ this.options.patchKey ],
+    (function(err, result) {
       if (err) { return callback(err) }
 
       if ( result.length === 0 ) {
         // nothing in the table yet
-        ctx.currentPatchLevel = 0
+        this.currentPatchLevel = 0
       }
       else {
         // convert the patch level from a string to a number
-        ctx.currentPatchLevel = +result[0].value
+        this.currentPatchLevel = +result[0].value
       }
 
       callback()
-    }
+    }).bind(this)
   )
 }
 
-function readPatchFiles(callback) {
-  var ctx = this
+Patcher.prototype.readPatchFiles = function readPatchFiles(callback) {
 
-  ctx.patches = {}
+  this.patches = {}
 
-  fs.readdir(ctx.options.dir, function(err, files) {
+  fs.readdir(this.options.dir, (function(err, files) {
     if (err) return callback(err)
 
-    files = files.map(function(filename) {
-      return path.join(ctx.options.dir, filename)
-    })
+    files = files.map((function(filename) {
+      return path.join(this.options.dir, filename)
+    }).bind(this))
 
     async.eachLimit(
       files,
       10,
-      function(filename, done) {
+      (function(filename, done) {
         var m = filename.match(/-(\d+)-(\d+)\.sql$/)
         if ( !m ) {
           return done(new Error('Unknown file format: ' + filename))
@@ -180,42 +213,41 @@ function readPatchFiles(callback) {
 
         var from = parseInt(m[1], 10)
         var to = parseInt(m[2], 10)
-        ctx.patches[from] = ctx.patches[from] || {}
+        this.patches[from] = this.patches[from] || {}
 
-        fs.readFile(filename, { encoding : 'utf8' }, function(err, data) {
+        fs.readFile(filename, { encoding : 'utf8' }, (function(err, data) {
           if (err) return done(err)
-          ctx.patches[from][to] = data
+          this.patches[from][to] = data
           done()
-        })
-      },
+        }).bind(this))
+      }).bind(this),
       function(err) {
         if (err) return callback(err)
         callback()
       }
     )
-  })
+  }).bind(this))
 }
 
-function checkAllPatchesAvailable(callback) {
-  var ctx = this
+Patcher.prototype.checkAllPatchesAvailable = function checkAllPatchesAvailable(callback) {
 
-  ctx.patchesToApply = []
+  this.patchesToApply = []
 
   // if we don't need any patches
-  if ( ctx.options.patchLevel === ctx.currentPatchLevel ) {
+  if ( this.options.patchLevel === this.currentPatchLevel ) {
     process.nextTick(callback)
     return
   }
 
   // First, loop through all the patches we need to apply to make sure they exist.
-  var direction = ctx.currentPatchLevel < ctx.options.patchLevel ? 1 : -1
-  var currentPatchLevel = ctx.currentPatchLevel
+  var direction = this.currentPatchLevel < this.options.patchLevel ? 1 : -1
+  var currentPatchLevel = this.currentPatchLevel
   var nextPatchLevel
-  while ( currentPatchLevel !== ctx.options.patchLevel ) {
+  while ( currentPatchLevel !== this.options.patchLevel ) {
     nextPatchLevel = currentPatchLevel + direction
 
     // check that this patch exists
-    if ( !ctx.patches[currentPatchLevel] || !ctx.patches[currentPatchLevel][nextPatchLevel] ) {
+    if ( !this.patches[currentPatchLevel] || !this.patches[currentPatchLevel][nextPatchLevel] ) {
       process.nextTick(function() {
         callback(new Error('Patch from level ' + currentPatchLevel + ' to ' + nextPatchLevel + ' does not exist'))
       })
@@ -223,8 +255,8 @@ function checkAllPatchesAvailable(callback) {
     }
 
     // add this patch onto the patchesToApply
-    ctx.patchesToApply.push({
-      sql  : ctx.patches[currentPatchLevel][nextPatchLevel],
+    this.patchesToApply.push({
+      sql  : this.patches[currentPatchLevel][nextPatchLevel],
       from : currentPatchLevel,
       to   : nextPatchLevel,
     })
@@ -234,22 +266,20 @@ function checkAllPatchesAvailable(callback) {
   callback()
 }
 
-function applyPatches(callback) {
-  var ctx = this
-
+Patcher.prototype.applyPatches = function applyPatches(callback) {
   async.eachSeries(
-    ctx.patchesToApply,
-    function(patch, donePatch) {
+    this.patchesToApply,
+    (function(patch, donePatch) {
       // emit : 'Updating DB for patch ' + patch.from + ' to ' + patch.to
-      ctx.connection.query(patch.sql, function(err, info) {
+      this.connection.query(patch.sql, (function(err, info) {
         if (err) return donePatch(err)
 
         // check that the database is now at the (intermediate) patch level
-        var query = "SELECT value FROM " + ctx.options.metaTable +  " WHERE name = ?"
-        ctx.connection.query(
+        var query = "SELECT value FROM " + this.options.metaTable +  " WHERE name = ?"
+        this.connection.query(
           query,
-          [ ctx.options.patchKey ],
-          function(err, result) {
+          [ this.options.patchKey ],
+          (function(err, result) {
             if (err) {
               // this is not an error if we are wanting to patch to level 0
               // and the problem is that the metaTable is not there
@@ -274,26 +304,51 @@ function applyPatches(callback) {
               return donePatch(new Error('Patch level in metaTable (%s) is incorrect after this patch (%s)', result[0].value, patch.to))
             }
 
+            this.currentPatchLevel = result[0].value
             donePatch()
-          }
+          }).bind(this)
         )
-      })
-    },
-    callback
+      }).bind(this))
+    }).bind(this),
+    (function(err) {
+      // Update our internal state if a patch created the db metadata table.
+      if (this.metaTableExists) {
+        callback(err)
+      } else {
+        this.checkDbMetadataExists(function(err2) {
+          callback(err || err2)
+        })
+      }
+    }).bind(this)
   )
 }
 
-function closeConnection(callback) {
-  this.connection.end(callback)
+
+// A much simpler, stateless function for just doing a patch.
+
+Patcher.patch = function patch(options, callback) {
+  callback = callback || noop
+
+  try {
+    var patcher = new Patcher(options);
+  } catch (err) {
+    return callback(err);
+  }
+
+  patcher.connect(function(err) {
+    if (err) {
+      return callback(err)
+    }
+    patcher.patch(function(err) {
+      // Always close the connection, but preserve original error.
+      patcher.end(function(err2) {
+        return callback(err || err2)
+      })
+    })
+  })
+
 }
 
+
 // main export
-module.exports.patch = patch
-// and these for testing purposes
-module.exports.createDatabase = createDatabase
-module.exports.changeUser = changeUser
-module.exports.checkDbMetadataExists = checkDbMetadataExists
-module.exports.readDbPatchLevel = readDbPatchLevel
-module.exports.readPatchFiles = readPatchFiles
-module.exports.checkAllPatchesAvailable = checkAllPatchesAvailable
-module.exports.applyPatches = applyPatches
+module.exports = Patcher

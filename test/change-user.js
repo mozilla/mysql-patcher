@@ -4,28 +4,33 @@
 var path = require('path')
 
 var test = require('tape')
-var patcher = require('../')
+var Patcher = require('../')
+var mockMySQL = require('./mock-mysql')
 
 test('check that the changeUser is doing the right thing', function(t) {
-  t.plan(2)
+  t.plan(5)
 
-  var count = 0
-  var ctx = {
-    connection : {
+  var options = {
+    user : 'user',
+    password : 'password',
+    database : 'database',
+    dir : 'nonexistent',
+    patchLevel: 0,
+    mysql : mockMySQL({
       changeUser : function(obj, callback) {
-        t.deepEqual(obj, ctx.options, 'The changeUser was passed user, password and database as expected')
+        t.equal(obj.user, options.user, 'changeUser was passed user correctly')
+        t.equal(obj.password, options.password, 'changeUser was passed password correctly')
+        t.equal(obj.database, options.database, 'changeUser was passed database correctly')
         process.nextTick(callback)
-      },
-    },
-    options : {
-      user     : 'user',
-      password : 'password',
-      database : 'database',
-    },
+      }
+    })
   }
-
-  patcher.changeUser.call(ctx, function(err) {
+  var p = new Patcher(options);
+  p.createConnection(function(err) {
     t.ok(!err, 'No error occurred')
-    t.end()
+    p.changeUser(function(err) {
+      t.ok(!err, 'No error occurred')
+      t.end()
+    })
   })
 })

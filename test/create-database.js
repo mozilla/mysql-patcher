@@ -4,50 +4,55 @@
 var path = require('path')
 
 var test = require('tape')
-var patcher = require('../')
+var Patcher = require('../')
+var mockMySQL = require('./mock-mysql')
 
 test('check that createDatabase is being called when asked for', function(t) {
-  t.plan(2)
+  t.plan(3)
 
-  var count = 0
-  var ctx = {
-    connection : {
+  var p = new Patcher({
+    database : 'database',
+    createDatabase : true,
+    dir: 'nonexistent',
+    patchLevel: 0,
+    mysql : mockMySQL({
       query : function(sql, callback) {
         t.equal(sql, 'CREATE DATABASE IF NOT EXISTS database CHARACTER SET utf8 COLLATE utf8_unicode_ci')
         callback()
-      },
-    },
-    options : {
-      database       : 'database',
-      createDatabase : true,
-    },
-  }
+      }
+    })
+  })
 
-  patcher.createDatabase.call(ctx, function(err) {
+  p.createConnection(function(err) {
     t.ok(!err, 'No error occurred')
-    t.end()
+    p.createDatabase(function(err) {
+      t.ok(!err, 'No error occurred')
+      t.end()
+    })
   })
 })
 
 test('check that createDatabase is not being called when false', function(t) {
-  t.plan(1)
+  t.plan(2)
 
-  var count = 0
-  var ctx = {
-    connection : {
+  var p = new Patcher({
+    database : 'database',
+    createDatabase : false,
+    dir: 'nonexistent',
+    patchLevel: 0,
+    mysql : mockMySQL({
       query : function(sql, callback) {
         t.fail('.query() should not have been called with the create database command')
         callback()
-      },
-    },
-    options : {
-      database       : 'database',
-      createDatabase : false,
-    },
-  }
+      }
+    })
+  })
 
-  patcher.createDatabase.call(ctx, function(err) {
+  p.createConnection(function(err) {
     t.ok(!err, 'No error occurred')
-    t.end()
+    p.createDatabase(function(err) {
+      t.ok(!err, 'No error occurred')
+      t.end()
+    })
   })
 })

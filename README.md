@@ -111,6 +111,22 @@ UPDATE metadata SET value = '1' WHERE name = 'schema-patch-level';
 
 ## Changelog ##
 
+### v0.6.1 - 2015-02-02 ###
+
+* fixed up a test related to patch application
+
+### v0.6.0 - 2015-02-02 ###
+
+* added ability to create an instance of Patcher which can be controlled more succinctly
+
+### v0.5.1 - 2015-01-21 ###
+
+* fix patch direction error message
+
+### v0.5.0 - 2015-01-19 ###
+
+* fix error handling when the connection fails
+
 ### v0.4.0 - 2014-11-14 ###
 
 * added a check between patches to make sure the patch level was incremented properly

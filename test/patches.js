@@ -150,7 +150,7 @@ test('checking that these patch files are executed', function(t) {
     dir : path.join(__dirname, 'end-to-end'),
     metaTable : 'metadata',
     patchKey : 'schema-patch-level',
-    patchLevel : 0,
+    patchLevel : 3,
     mysql : mockMySQL({
       query : function(sql, args, callback) {
         if ( typeof callback === 'undefined' ) {
@@ -159,10 +159,10 @@ test('checking that these patch files are executed', function(t) {
         }
         // Mock out db-metadata-related queries.
         if ( sql.match(/SELECT value FROM metadata WHERE name/) ) {
-          return callback(null, [])
+          return callback(null, [{value: ""+count}])
         }
         if ( sql.match(/SELECT .+ AS count FROM information_schema/) ) {
-          return callback(null, [{count: 0}])
+          return callback(null, [{count: 1}])
         }
         t.equal(sql, p.patchesToApply[count].sql, 'SQL is correct')
         count += 1
@@ -173,13 +173,15 @@ test('checking that these patch files are executed', function(t) {
   p.currentPatchLevel = 0
 
   p.createConnection(function(err) {
-    t.ok(!err, 'No error occurred')
+    t.ok(!err, 'No error occurred while creating connection')
     p.readPatchFiles(function(err) {
-      t.ok(!err, 'No error occurred')
+      t.ok(!err, 'No error occurred while reading patch files')
       p.checkAllPatchesAvailable(function(err) {
-        t.ok(!err, 'No error occurred')
+        t.ok(!err, 'No error occurred while checking patches are available')
         p.applyPatches(function(err) {
-          t.ok(!err, 'No error occurred')
+          t.ok(!err, 'No error occurred while applying patches')
+          t.equal(count, 3, 'all patches were executed')
+          t.equal(p.currentPatchLevel, 3, 'the patch level was updated')
           t.end()
         })
       })

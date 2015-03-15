@@ -111,6 +111,10 @@ UPDATE metadata SET value = '1' WHERE name = 'schema-patch-level';
 
 ## Changelog ##
 
+### Pending ###
+
+* fixed a test related to access for an unknown user
+
 ### v0.6.1 - 2015-02-02 ###
 
 * fixed up a test related to patch application

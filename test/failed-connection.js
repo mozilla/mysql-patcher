@@ -24,7 +24,7 @@ test('run test with invalid user', function(t) {
     options,
     {
       user       : 'unknown-user',
-      password   : '',
+      password   : 'password',
       dir        : path.join(__dirname, 'non-existant-dir'),
       patchLevel : 1,
       metaTable  : 'failed_insert',
@@ -36,7 +36,7 @@ test('run test with invalid user', function(t) {
   patcher.patch(opts, function(err, res) {
     t.ok(err, 'There was an error when patching the database')
     t.ok(!res, 'No result was returned')
-    t.equal('' + err, "Error: ER_ACCESS_DENIED_ERROR: Access denied for user 'unknown-user'@'localhost' (using password: NO)")
+    t.equal('' + err, "Error: ER_ACCESS_DENIED_ERROR: Access denied for user 'unknown-user'@'localhost' (using password: YES)")
     t.end()
   })
 })

@@ -9,6 +9,7 @@ var path = require('path')
 // npm
 var async = require('async')
 var clone = require('clone')
+var glob = require('glob')
 
 // globals for this package
 var noop = Function.prototype // a No Op function
@@ -40,6 +41,7 @@ function Patcher(options) {
   this.options.reversePatchAllowed = this.options.reversePatchAllowed || false
   this.options.patchKey = this.options.patchKey || 'patch'
   this.options.createDatabase = this.options.createDatabase || false
+  this.options.filePrefix = this.options.filePrefix || 'patch'
 
   // set this on the connection since we can have multiple statements
   // in every patch
@@ -191,33 +193,60 @@ Patcher.prototype.readDbPatchLevel = function readDbPatchLevel(callback) {
   )
 }
 
+function extractBaseAndLevels(filename) {
+  var basename = path.basename(filename, '.sql')
+  var parts = basename.split('-')
+
+  if ( parts.length < 3 ) {
+    return false
+  }
+
+  if ( parts.length > 3 ) {
+    parts = [ parts.slice(0, parts.length - 2).join('-'), parts[parts.length-2], parts[parts.length-1] ]
+  }
+
+  // now parts is of length 3
+  return {
+    base : parts[0],
+    from : parseInt(parts[1], 10) || 0, // fixes parseInt('a', 10) => NaN
+    to   : parseInt(parts[2], 10) || 0, // fixes parseInt('b', 10) => NaN
+  }
+}
+
 Patcher.prototype.readPatchFiles = function readPatchFiles(callback) {
 
   this.patches = {}
 
-  fs.readdir(this.options.dir, (function(err, files) {
+  var globSpec = path.join(this.options.dir, this.options.filePrefix) + '-*-*.sql'
+  glob(globSpec, (function(err, files) {
     if (err) return callback(err)
-
-    files = files.map((function(filename) {
-      return path.join(this.options.dir, filename)
-    }).bind(this))
 
     async.eachLimit(
       files,
       10,
       (function(filename, done) {
-        var m = filename.match(/-(\d+)-(\d+)\.sql$/)
-        if ( !m ) {
-          return done(new Error('Unknown file format: ' + filename))
+
+        var info = extractBaseAndLevels(filename)
+        if ( !info ) {
+          // don't look at this file since it doesn't match the spec
+          return done()
         }
 
-        var from = parseInt(m[1], 10)
-        var to = parseInt(m[2], 10)
-        this.patches[from] = this.patches[from] || {}
+        // check the base is what we expect
+        if ( info.base !== this.options.filePrefix ) {
+          return done()
+        }
+
+        // check we have a 'from' and 'to'
+        if ( info.from === 0 && info.to === 0 ) {
+          return done()
+        }
+
+        this.patches[info.from] = this.patches[info.from] || {}
 
         fs.readFile(filename, { encoding : 'utf8' }, (function(err, data) {
           if (err) return done(err)
-          this.patches[from][to] = data
+          this.patches[info.from][info.to] = data
           done()
         }).bind(this))
       }).bind(this),

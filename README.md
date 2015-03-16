@@ -19,6 +19,7 @@ var options = {
   dir        : path.join(__dirname, 'schema'),
   patchKey   : 'schema-patch-level',
   patchLevel : 4,
+  filePrefix : 'patch',
   metaTable  : 'metadata',
   mysql      : mysql,
 }
@@ -56,6 +57,7 @@ Specific options for `mysql-patcher`:
 * patchKey            : string - the name of the row in the metaTable which stores the current patch
 * createDatabase      : true/false - tries to create the database if it doesn't exist (default: false)
 * reversePatchAllowed : true/false - allow reverse patching to take place (default: false)
+* filePrefix          : string - the patchfile prefix to look for e.g. patch-001-002.sql (default: 'patch')
 
 ## Database Patch Files ##
 
@@ -113,6 +115,7 @@ UPDATE metadata SET value = '1' WHERE name = 'schema-patch-level';
 
 ### Pending ###
 
+* added option 'filePrefix' to tighten which files are classed as patch files
 * fixed a test related to access for an unknown user
 
 ### v0.6.1 - 2015-02-02 ###

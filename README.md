@@ -115,6 +115,10 @@ UPDATE metadata SET value = '1' WHERE name = 'schema-patch-level';
 
 ### Pending ###
 
+* none
+
+### v0.7.0 - 2015-03-16 ###
+
 * added option 'filePrefix' to tighten which files are classed as patch files
 * fixed a test related to access for an unknown user
 

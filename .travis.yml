@@ -7,8 +7,6 @@ services:
  - mysql
 
 notifications:
-  email:
-    - achilton@mozilla.com
   irc:
     channels:
       - "irc.mozilla.org#fxa"
